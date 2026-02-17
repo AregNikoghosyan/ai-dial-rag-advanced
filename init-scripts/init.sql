@@ -3,14 +3,14 @@
 CREATE EXTENSION IF NOT EXISTS vector;
 
 -- Create a table to store vectors with vector embeddings
--- Each item has an ID, document_name, text, and a 1536-dimensional vector
--- The vector dimension (1536) matches common embedding models like OpenAI's
+-- Each item has an ID, document_name, text, and a 768-dimensional vector
+-- The vector dimension (768) matches common embedding models like OpenAI's
 CREATE TABLE IF NOT EXISTS vectors
 (
     id            SERIAL PRIMARY KEY,
     document_name VARCHAR(64),
     text          TEXT NOT NULL,
-    embedding     VECTOR(1536)
+    embedding     VECTOR(768)
 );
 
 -- Grant database access permissions to the postgres user

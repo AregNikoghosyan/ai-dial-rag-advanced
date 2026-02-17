@@ -7,34 +7,93 @@ from task.models.message import Message
 from task.models.role import Role
 
 
-#TODO:
-# Create system prompt with info that it is RAG powered assistant.
-# Explain user message structure (firstly will be provided RAG context and the user question).
-# Provide instructions that LLM should use RAG Context when answer on User Question, will restrict LLM to answer
-# questions that are not related microwave usage, not related to context or out of history scope
 SYSTEM_PROMPT = """
+You are a RAG-powered Microwave Manual Assistant.
+
+You will receive:
+1) RAG Context - retrieved parts of the microwave manual.
+2) User Question.
+
+Answer only using the provided RAG Context.
+If the answer is not found in the context, respond:
+"I cannot find this information in the manual."
+Do not use outside knowledge.
+Do not answer questions unrelated to microwave usage.
+Keep answers clear and precise.
 """
 
-#TODO:
-# Provide structured system prompt, with RAG Context and User Question sections.
+
 USER_PROMPT = """
+RAG Context:
+{context}
+
+User Question:
+{question}
 """
 
 
-#TODO:
-# - create embeddings client with 'text-embedding-3-small-1' model
-# - create chat completion client
-# - create text processor, DB config: {'host': 'localhost','port': 5433,'database': 'vectordb','user': 'postgres','password': 'postgres'}
-# ---
-# Create method that will run console chat with such steps:
-# - get user input from console
-# - retrieve context
-# - perform augmentation
-# - perform generation
-# - it should run in `while` loop (since it is console chat)
+def main():
+
+    embeddings_client = DialEmbeddingsClient(
+        deployment_name="text-embedding-005",
+        api_key=API_KEY
+    )
+
+    chat_client = DialChatCompletionClient(
+    deployment_name="anthropic.claude-haiku-4-5-20251001-v1:0",
+    api_key=API_KEY
+)
 
 
+    db_config = {
+        "host": "localhost",
+        "port": 5433,
+        "database": "vectordb",
+        "user": "postgres",
+        "password": "postgres"
+    }
 
-# TODO:
-#  PAY ATTENTION THAT YOU NEED TO RUN Postgres DB ON THE 5433 WITH PGVECTOR EXTENSION!
-#  RUN docker-compose.yml
+    processor = TextProcessor(embeddings_client, db_config)
+
+    processor.process_text_file(
+        "task/embeddings/microwave_manual.txt"
+    )
+
+    print("Microwave RAG Assistant is ready.")
+    print("Type 'exit' to quit.\n")
+
+    while True:
+        user_input = input("You: ")
+
+        if user_input.lower() == "exit":
+            break
+
+        retrieved_chunks = processor.search(
+            search_mode=SearchMode.COSINE_DISTANCE,
+            user_request=user_input,
+            top_k=5,
+            min_score=0.6
+        )
+
+        if not retrieved_chunks:
+            print("Assistant: I cannot find this information in the manual.\n")
+            continue
+
+        context = "\n\n".join(retrieved_chunks)
+
+        formatted_user_prompt = USER_PROMPT.format(
+            context=context,
+            question=user_input
+        )
+
+        conversation = Conversation()
+        conversation.add_message(Message(role=Role.SYSTEM, content=SYSTEM_PROMPT))
+        conversation.add_message(Message(role=Role.USER, content=formatted_user_prompt))
+
+        response = chat_client.get_completion(conversation.messages)
+
+        print(f"Assistant: {response.content}\n")
+
+
+if __name__ == "__main__":
+    main()
